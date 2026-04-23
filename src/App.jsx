@@ -42,7 +42,7 @@ export default function App() {
   const [copied, setCopied] = useState(false)
   const tr = t[lang]
 
-  const { data, loading, error } = useStockData(ticker)
+  const { data, loading, error, lastUpdate } = useStockData(ticker)
 
   const copyReport = useCallback(async () => {
     const text = buildReportText(data, tr)
@@ -100,9 +100,16 @@ export default function App() {
                 junto al botón de copy sin overflow.
             ──────────────────────────────────────────────────── */}
             <footer className="mt-8 flex items-center justify-between gap-3 border-t border-[#1e2130] pt-4">
-              <span className="text-[10px] font-mono text-slate-600 truncate">
-                {tr.page} {page} {tr.of} 2 · {ticker} · {new Date().toLocaleDateString()}
-              </span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[10px] font-mono text-slate-600 truncate">
+                  {tr.page} {page} {tr.of} 2 · {ticker}
+                </span>
+                {lastUpdate && (
+                  <span className="text-[9px] font-mono text-slate-700 truncate">
+                    {data?.hasLivePrice ? '● live' : '○ simulated'} · {lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </span>
+                )}
+              </div>
               {/* min-h-[44px] = área táctil mínima recomendada por Apple/WCAG */}
               <button
                 onClick={copyReport}

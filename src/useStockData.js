@@ -199,28 +199,43 @@ async function fetchLive(ticker) {
 }
 
 // ── Hook principal ───────────────────────────────────────────
-export function useStockData(ticker) {
-  const [data,    setData]    = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState(null)
+// Intervalo de auto-refresh: 60s (Yahoo Finance actualiza precios cada ~15-60s).
+// En el refresh silencioso no mostramos spinner — solo actualizamos los datos.
+const REFRESH_INTERVAL_MS = 60_000
 
-  const load = useCallback(async () => {
-    setLoading(true)
+export function useStockData(ticker) {
+  const [data,      setData]      = useState(null)
+  const [loading,   setLoading]   = useState(true)
+  const [error,     setError]     = useState(null)
+  const [lastUpdate,setLastUpdate]= useState(null)
+
+  // Carga inicial (con spinner) o silent refresh (sin spinner)
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
     setError(null)
     try {
       const d = await fetchLive(ticker)
       setData(d)
-      // Solo marcar error si no hay NINGÚN dato real
+      setLastUpdate(new Date())
       if (!d.hasLivePrice) setError('live')
     } catch {
-      setData(buildFallback(ticker))
-      setError('live')
+      if (!silent) {
+        setData(buildFallback(ticker))
+        setError('live')
+      }
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [ticker])
 
+  // Carga inicial al montar o cambiar ticker
   useEffect(() => { load() }, [load])
 
-  return { data, loading, error, reload: load }
+  // Auto-refresh cada 60s (no muestra spinner)
+  useEffect(() => {
+    const id = setInterval(() => load(true), REFRESH_INTERVAL_MS)
+    return () => clearInterval(id)  // cleanup al desmontar o cambiar ticker
+  }, [load])
+
+  return { data, loading, error, lastUpdate, reload: load }
 }

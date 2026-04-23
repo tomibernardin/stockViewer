@@ -1,27 +1,33 @@
-// Vercel serverless function — proxy a Yahoo Finance con crumb auth.
-// Node 18 runtime (Vercel default) — usa native fetch + getSetCookie().
+// ============================================================
+// api/quote.js — Vercel Serverless Function
+// Proxy a Yahoo Finance con autenticación crumb.
+// Runtime: Node 18 (Vercel default) — usa native fetch.
 //
-// Yahoo Finance requiere un "crumb" token que se obtiene:
-// 1. GET finance.yahoo.com → cookies
-// 2. GET /v1/test/getcrumb con esas cookies → crumb string
-// 3. Usar crumb como query param en llamadas a quoteSummary
+// Flujo:
+//   1. GET finance.yahoo.com → obtener cookies de sesión
+//   2. GET /v1/test/getcrumb con esas cookies → crumb token
+//   3. GET chart (precio/historial) — no requiere crumb
+//   4. GET quoteSummary (fundamentales) — requiere crumb
 //
-// El crumb se cachea en memoria: vive mientras la instancia esté caliente
-// (Vercel reutiliza instancias durante ~10 min).
+// El crumb se cachea en memoria mientras la instancia está caliente
+// (Vercel reutiliza instancias ~10 min). TTL: 25 min.
+// ============================================================
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
-let _session = null
+// Caché en memoria (warm instance)
+let _session   = null
+const _fundCache = new Map()
+const _priceCache = new Map()
 
-async function getSession() {
-  // Reusar si fue obtenido en los últimos 25 minutos
-  if (_session && _session.expiresAt > Date.now()) return _session
+async function getSession(forceRefresh = false) {
+  if (!forceRefresh && _session?.expiresAt > Date.now()) return _session
 
   const r1 = await fetch('https://finance.yahoo.com/', {
     headers: { 'User-Agent': UA },
     redirect: 'follow',
   })
-  // getSetCookie() disponible en Node 18+
+  // Node 18: getSetCookie() devuelve array de strings
   const rawCookies = r1.headers.getSetCookie?.() ?? []
   const cookie = rawCookies.join('; ')
 
@@ -29,8 +35,13 @@ async function getSession() {
     headers: { 'User-Agent': UA, Cookie: cookie },
   })
   const crumb = (await r2.text()).trim()
+  const valid  = crumb.length > 0 && crumb.length < 50 && !crumb.includes('<') && !crumb.includes(' ')
 
-  _session = { cookie, crumb, expiresAt: Date.now() + 25 * 60 * 1000 }
+  _session = {
+    cookie,
+    crumb:     valid ? crumb : null,
+    expiresAt: Date.now() + (valid ? 25 : 2) * 60 * 1000,
+  }
   return _session
 }
 
@@ -41,28 +52,55 @@ export default async function handler(req, res) {
     return
   }
 
+  const ticker = symbol.toUpperCase()
+
   try {
-    const ticker  = symbol.toUpperCase()
-    const session = await getSession()
-    const headers = { 'User-Agent': UA, Cookie: session.cookie }
-    const modules = 'summaryDetail,defaultKeyStatistics,financialData,earnings'
+    const headers = { 'User-Agent': UA }
 
-    const [summaryRes, chartRes] = await Promise.all([
-      fetch(
-        `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}?modules=${modules}&crumb=${encodeURIComponent(session.crumb)}`,
+    // ── Chart (caché 45s) ────────────────────────────────────
+    let chartBody = _priceCache.get(ticker)?.expiresAt > Date.now()
+      ? _priceCache.get(ticker).data
+      : null
+
+    if (!chartBody) {
+      const cr = await fetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1mo&range=1y`,
         { headers }
-      ),
-      fetch(
-        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1mo&range=1y&crumb=${encodeURIComponent(session.crumb)}`,
-        { headers }
-      ),
-    ])
+      )
+      chartBody = cr.ok ? await cr.json() : null
+      if (chartBody) _priceCache.set(ticker, { data: chartBody, expiresAt: Date.now() + 45_000 })
+    }
 
-    const [summary, chart] = await Promise.all([summaryRes.json(), chartRes.json()])
+    // ── QuoteSummary con crumb (caché 5min) ──────────────────
+    let summaryBody = _fundCache.get(ticker)?.expiresAt > Date.now()
+      ? _fundCache.get(ticker).data
+      : null
 
-    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600')
-    res.status(200).json({ summary, chart })
+    if (!summaryBody) {
+      try {
+        let session = await getSession()
+        if (session.crumb) {
+          const modules = 'summaryDetail,defaultKeyStatistics,financialData,earnings'
+          const sr = await fetch(
+            `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}?modules=${modules}&crumb=${encodeURIComponent(session.crumb)}`,
+            { headers: { ...headers, Cookie: session.cookie } }
+          )
+          if (sr.status === 401) {
+            session = await getSession(true)  // renovar crumb
+          } else if (sr.ok) {
+            summaryBody = await sr.json()
+            if (summaryBody?.quoteSummary?.result?.[0]) {
+              _fundCache.set(ticker, { data: summaryBody, expiresAt: Date.now() + 5 * 60_000 })
+            }
+          }
+        }
+      } catch { /* fundamentales son best-effort */ }
+    }
+
+    // Cache-Control: 40s para que Vercel CDN no sirva precios viejos
+    res.setHeader('Cache-Control', 's-maxage=40, stale-while-revalidate=20')
+    res.status(200).json({ summary: summaryBody ?? {}, chart: chartBody ?? {} })
   } catch (err) {
-    res.status(502).json({ error: 'upstream fetch failed', detail: err.message })
+    res.status(502).json({ error: 'upstream failed', detail: err.message })
   }
 }
