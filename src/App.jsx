@@ -81,9 +81,14 @@ export default function App() {
         {!loading && (
           <>
             {/* Banner de datos simulados */}
-            {error && (
+            {error && !data?.hasLivePrice && (
               <div className="mb-4 px-3 py-2.5 bg-amber-400/10 border border-amber-400/30 rounded-lg text-xs font-mono text-amber-400 leading-relaxed">
                 ⚠ Live data unavailable — showing simulated data for {ticker}
+              </div>
+            )}
+            {data?.hasLivePrice && data?.isFallback && (
+              <div className="mb-4 px-3 py-2.5 bg-blue-400/10 border border-blue-400/30 rounded-lg text-xs font-mono text-blue-400 leading-relaxed">
+                ℹ Live price data · Fundamentals are estimated
               </div>
             )}
 
