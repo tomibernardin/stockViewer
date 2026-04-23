@@ -21,6 +21,7 @@ Thumbs.db
 
 # Claude Code (IDE config — no debe ir al repo)
 .claude/
+CLAUDE.md
 
 # Logs
 *.log
