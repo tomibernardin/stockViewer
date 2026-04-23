@@ -40,7 +40,12 @@ export default function StockBar({ data, tr }) {
           className="overflow-x-auto scrollbar-none"
           style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}
         >
-          <div className="flex gap-5 py-2.5 px-4 w-max sm:w-full sm:justify-between">
+          {/* Mobile: fila w-max con spacers explícitos a cada lado (px en overflow se comporta distinto).
+              Desktop sm+: w-full + justify-between, sin spacers. */}
+          <div className="flex items-start gap-5 py-2.5 w-max sm:w-full sm:justify-between sm:px-4">
+            {/* spacer izquierdo — solo mobile */}
+            <div className="shrink-0 w-3 sm:hidden" aria-hidden="true" />
+
             {items.map(({ label, value, color }) => (
               <div
                 key={label}
@@ -55,6 +60,9 @@ export default function StockBar({ data, tr }) {
                 </span>
               </div>
             ))}
+
+            {/* spacer derecho — solo mobile (garantiza mismo margen que el izquierdo) */}
+            <div className="shrink-0 w-3 sm:hidden" aria-hidden="true" />
           </div>
         </div>
       </div>
