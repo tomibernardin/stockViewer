@@ -30,29 +30,33 @@ export default function StockBar({ data, tr }) {
 
   return (
     <div className="bg-[#0f1117] border-b border-[#1e2130]">
-      {/*
-        El div interior limita el ancho al mismo max-w-5xl que el <main>.
-        El scroll se aplica a ese contenedor, no al wrapper full-width.
-      */}
       <div className="max-w-5xl mx-auto">
+        {/*
+          El overflow va sobre el wrapper vacío de padding.
+          El padding real (px-4/px-6) se pone en el div interno w-max,
+          así tanto el margen izquierdo como el derecho son visibles
+          aunque el contenido desborde horizontalmente.
+        */}
         <div
-          className="flex gap-0 overflow-x-auto scrollbar-none px-4 sm:px-6 py-2.5"
+          className="overflow-x-auto scrollbar-none"
           style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}
         >
-          {items.map(({ label, value, color }) => (
-            <div
-              key={label}
-              className="flex flex-col shrink-0 pr-6"
-              style={{ scrollSnapAlign: 'start' }}
-            >
-              <span className="text-[10px] text-slate-500 uppercase tracking-wider font-mono whitespace-nowrap">
-                {label}
-              </span>
-              <span className={`font-mono text-sm font-semibold whitespace-nowrap ${color}`}>
-                {value}
-              </span>
-            </div>
-          ))}
+          <div className="flex gap-0 py-2.5 px-4 sm:px-6 w-max">
+            {items.map(({ label, value, color }) => (
+              <div
+                key={label}
+                className="flex flex-col shrink-0 pr-6"
+                style={{ scrollSnapAlign: 'start' }}
+              >
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-mono whitespace-nowrap">
+                  {label}
+                </span>
+                <span className={`font-mono text-sm font-semibold whitespace-nowrap ${color}`}>
+                  {value}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
