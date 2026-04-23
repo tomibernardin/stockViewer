@@ -1,9 +1,8 @@
 // ============================================================
 // StockBar
-// Barra horizontal de KPIs del ticker activo.
-// El fondo va de borde a borde; el contenido respeta el mismo
-// max-width y padding horizontal que el resto de la app.
-// En mobile: scroll horizontal con snap para ver todos los KPIs.
+// Barra de KPIs del ticker activo.
+// Se contiene dentro de los mismos márgenes que el resto de la app
+// (max-w-5xl mx-auto px-4 sm:px-6), igual que el selector y el main.
 // ============================================================
 
 function fmtChange(change, changePct, up) {
@@ -20,28 +19,28 @@ export default function StockBar({ data, tr }) {
   const changeColor = up ? 'text-green-400' : 'text-red-400'
 
   const items = [
-    { label: tr.price,      value: data.price != null ? `$${data.price}` : '—',      color: 'text-white' },
-    { label: tr.change,     value: fmtChange(data.change, data.changePct, up),        color: changeColor },
-    { label: tr.volume,     value: data.volume     ?? '—',                            color: 'text-slate-300' },
-    { label: tr.marketCap,  value: data.marketCap  ?? '—',                            color: 'text-slate-300' },
+    { label: tr.price,      value: data.price     != null ? `$${data.price}`     : '—', color: 'text-white' },
+    { label: tr.change,     value: fmtChange(data.change, data.changePct, up),           color: changeColor },
+    { label: tr.volume,     value: data.volume     ?? '—',                               color: 'text-slate-300' },
+    { label: tr.marketCap,  value: data.marketCap  ?? '—',                               color: 'text-slate-300' },
     { label: tr.week52High, value: data.week52High != null ? `$${data.week52High}` : '—', color: 'text-slate-300' },
     { label: tr.week52Low,  value: data.week52Low  != null ? `$${data.week52Low}`  : '—', color: 'text-slate-300' },
   ]
 
   return (
-    <div className="bg-[#0f1117] border-b border-[#1e2130]">
-      <div className="max-w-5xl mx-auto">
+    // Mismo ancho y márgenes laterales que <main> y el selector
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2">
+      <div className="bg-[#0f1117] border border-[#1e2130] rounded-lg overflow-hidden">
         {/*
-          El overflow va sobre el wrapper vacío de padding.
-          El padding real (px-4/px-6) se pone en el div interno w-max,
-          así tanto el margen izquierdo como el derecho son visibles
-          aunque el contenido desborde horizontalmente.
+          overflow-x-auto en el wrapper sin padding.
+          El padding va en el div interno w-max para que
+          tanto el margen izquierdo como el derecho sean visibles.
         */}
         <div
           className="overflow-x-auto scrollbar-none"
           style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}
         >
-          <div className="flex gap-0 py-2.5 px-4 sm:px-6 w-max">
+          <div className="flex gap-0 py-2.5 px-4 w-max">
             {items.map(({ label, value, color }) => (
               <div
                 key={label}
