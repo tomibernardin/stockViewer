@@ -108,13 +108,28 @@ export default function Page1({ data, tr }) {
 
       {/* ── Score Breakdown ───────────────────────────────── */}
       <Section title={tr.score}>
-        <div className="bg-[#0f1117] border border-[#1e2130] rounded-xl p-4 sm:p-5 flex flex-col gap-4">
-          <ScoreBar label={tr.valuation}      score={scores.valuation} weight={35} />
-          <ScoreBar label={tr.financialHealth} score={scores.financial} weight={35} />
-          <ScoreBar label={tr.growth}          score={scores.growth}    weight={30} />
-          <div className="border-t border-[#1e2130] pt-3 flex justify-between items-baseline">
-            <span className="text-xs font-mono text-slate-400">Weighted Score</span>
-            <span className="font-mono font-bold text-white text-xl">{weightedScore}<span className="text-slate-500 text-sm"> / 100</span></span>
+        <div className="bg-[#0f1117] border border-[#1e2130] rounded-xl overflow-hidden">
+          {/* Barras de score */}
+          <div className="flex flex-col gap-3 p-4">
+            <ScoreBar label={tr.valuation}       score={scores.valuation} weight={35} />
+            <ScoreBar label={tr.financialHealth}  score={scores.financial} weight={35} />
+            <ScoreBar label={tr.growth}           score={scores.growth}    weight={30} />
+          </div>
+
+          {/* Weighted Score — fondo diferenciado para destacarlo */}
+          <div className="bg-[#0a0c12] border-t border-[#1e2130] px-4 py-3 flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-slate-500">
+                Weighted Score
+              </span>
+              <span className="text-[10px] font-mono text-slate-600">
+                35% val · 35% fin · 30% growth
+              </span>
+            </div>
+            <span className={`font-mono font-bold text-2xl ${weightedScore >= 67 ? 'text-green-400' : weightedScore >= 34 ? 'text-amber-400' : 'text-red-400'}`}>
+              {weightedScore}
+              <span className="text-slate-600 font-normal text-xs ml-0.5">/100</span>
+            </span>
           </div>
         </div>
       </Section>
