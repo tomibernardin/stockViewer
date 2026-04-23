@@ -2,17 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
-* { box-sizing: border-box; }
+/* ── Base ─────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  /* Evita reflow en iOS al rotar entre portrait/landscape */
+  -webkit-text-size-adjust: 100%;
+}
 
 body {
   background-color: #08090d;
   color: #e2e8f0;
   font-family: 'DM Sans', sans-serif;
   margin: 0;
+  /* Evita overflow horizontal en toda la app */
+  overflow-x: hidden;
 }
 
-.font-mono { font-family: 'JetBrains Mono', monospace; }
+/* ── Inputs: font-size mínimo 16px para evitar zoom en iOS ── */
+input, select, textarea {
+  font-size: 16px;
+}
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
+/* ── Scrollbar personalizada (desktop) ───────────────────── */
+::-webkit-scrollbar       { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #0f1117; }
 ::-webkit-scrollbar-thumb { background: #1e2130; border-radius: 3px; }
+
+/* ── Utility: ocultar scrollbar visualmente pero mantener funcionalidad */
+.scrollbar-none {
+  -ms-overflow-style: none;   /* IE/Edge */
+  scrollbar-width: none;      /* Firefox */
+}
+.scrollbar-none::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+
+/* ── Tipografía fluida ────────────────────────────────────── */
+.font-mono { font-family: 'JetBrains Mono', monospace; }
