@@ -40,11 +40,11 @@ export default function StockBar({ data, tr }) {
           className="overflow-x-auto scrollbar-none"
           style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}
         >
-          <div className="flex gap-0 py-2.5 px-3 w-max">
+          <div className="flex gap-5 py-2.5 px-3 w-max">
             {items.map(({ label, value, color }) => (
               <div
                 key={label}
-                className="flex flex-col shrink-0 pr-5"
+                className="flex flex-col shrink-0"
                 style={{ scrollSnapAlign: 'start' }}
               >
                 <span className="text-[10px] text-slate-500 uppercase tracking-wider font-mono whitespace-nowrap">
