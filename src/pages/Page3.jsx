@@ -415,11 +415,11 @@ export default function Page3({ data1, data2, ticker1, ticker2, tr }) {
                           <span className="text-[10px] font-mono text-slate-500">{q.quarter}</span>
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] font-mono text-slate-300">{q.revenue}</span>
-                            <span className="text-[10px] font-mono text-slate-400">EPS {q.eps}</span>
+                            <span className="text-[10px] font-mono text-slate-400">{tr.eps} {q.eps}</span>
                             <span className={`text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded ${
-                              q.epsStatus === 'beats'   ? 'bg-green-500/15 text-green-400' :
-                              q.epsStatus === 'misses'  ? 'bg-red-500/15 text-red-400'    :
-                                                          'bg-amber-500/15 text-amber-400'
+                              q.epsStatus === 'beats'  ? 'bg-green-500/15 text-green-400' :
+                              q.epsStatus === 'misses' ? 'bg-red-500/15 text-red-400'    :
+                                                         'bg-amber-500/15 text-amber-400'
                             }`}>
                               {q.epsStatus === 'beats' ? tr.beats : q.epsStatus === 'misses' ? tr.misses : tr.caution}
                             </span>
@@ -433,64 +433,61 @@ export default function Page3({ data1, data2, ticker1, ticker2, tr }) {
             </Section>
           )}
 
-          {/* Catalysts & Risks side-by-side */}
-          {data1.catalysts && data2.catalysts && (
-            <Section title={tr.catalysts}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {[
-                  { d: data1, color: 'blue',  ticker: ticker1 },
-                  { d: data2, color: 'amber', ticker: ticker2 },
-                ].map(({ d, color, ticker }) => (
-                  <div key={ticker} className="bg-[#0f1117] border border-[#1e2130] rounded-xl overflow-hidden">
-                    <div className={`px-3 py-2 border-b border-[#1e2130] ${
-                      color === 'blue' ? 'bg-blue-500/10' : 'bg-amber-500/10'
-                    }`}>
-                      <span className={`font-mono text-xs font-bold ${
-                        color === 'blue' ? 'text-blue-400' : 'text-amber-400'
-                      }`}>{ticker}</span>
-                    </div>
-                    <ul className="divide-y divide-[#1e2130]">
-                      {d.catalysts.map((c, i) => (
-                        <li key={i} className="px-3 py-2 flex items-start gap-2">
-                          <span className="text-green-500 text-xs mt-0.5 shrink-0">+</span>
-                          <span className="text-xs font-mono text-slate-300 leading-snug">{c}</span>
-                        </li>
-                      ))}
-                    </ul>
+          {/* Catalysts side-by-side — from i18n (same list, language-aware) */}
+          <Section title={tr.catalysts}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                { color: 'blue',  ticker: ticker1 },
+                { color: 'amber', ticker: ticker2 },
+              ].map(({ color, ticker }) => (
+                <div key={ticker} className="bg-[#0f1117] border border-[#1e2130] rounded-xl overflow-hidden">
+                  <div className={`px-3 py-2 border-b border-[#1e2130] ${
+                    color === 'blue' ? 'bg-blue-500/10' : 'bg-amber-500/10'
+                  }`}>
+                    <span className={`font-mono text-xs font-bold ${
+                      color === 'blue' ? 'text-blue-400' : 'text-amber-400'
+                    }`}>{ticker}</span>
                   </div>
-                ))}
-              </div>
-            </Section>
-          )}
+                  <ul className="divide-y divide-[#1e2130]">
+                    {tr.catalystsList.map((c, i) => (
+                      <li key={i} className="px-3 py-2 flex items-start gap-2">
+                        <span className="text-green-500 text-xs mt-0.5 shrink-0">+</span>
+                        <span className="text-xs font-mono text-slate-300 leading-snug">{c}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </Section>
 
-          {data1.risks && data2.risks && (
-            <Section title={tr.risks}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {[
-                  { d: data1, color: 'blue',  ticker: ticker1 },
-                  { d: data2, color: 'amber', ticker: ticker2 },
-                ].map(({ d, color, ticker }) => (
-                  <div key={ticker} className="bg-[#0f1117] border border-[#1e2130] rounded-xl overflow-hidden">
-                    <div className={`px-3 py-2 border-b border-[#1e2130] ${
-                      color === 'blue' ? 'bg-blue-500/10' : 'bg-amber-500/10'
-                    }`}>
-                      <span className={`font-mono text-xs font-bold ${
-                        color === 'blue' ? 'text-blue-400' : 'text-amber-400'
-                      }`}>{ticker}</span>
-                    </div>
-                    <ul className="divide-y divide-[#1e2130]">
-                      {d.risks.map((r, i) => (
-                        <li key={i} className="px-3 py-2 flex items-start gap-2">
-                          <span className="text-red-500 text-xs mt-0.5 shrink-0">–</span>
-                          <span className="text-xs font-mono text-slate-300 leading-snug">{r}</span>
-                        </li>
-                      ))}
-                    </ul>
+          {/* Risks side-by-side */}
+          <Section title={tr.risks}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                { color: 'blue',  ticker: ticker1 },
+                { color: 'amber', ticker: ticker2 },
+              ].map(({ color, ticker }) => (
+                <div key={ticker} className="bg-[#0f1117] border border-[#1e2130] rounded-xl overflow-hidden">
+                  <div className={`px-3 py-2 border-b border-[#1e2130] ${
+                    color === 'blue' ? 'bg-blue-500/10' : 'bg-amber-500/10'
+                  }`}>
+                    <span className={`font-mono text-xs font-bold ${
+                      color === 'blue' ? 'text-blue-400' : 'text-amber-400'
+                    }`}>{ticker}</span>
                   </div>
-                ))}
-              </div>
-            </Section>
-          )}
+                  <ul className="divide-y divide-[#1e2130]">
+                    {tr.risksList.map((r, i) => (
+                      <li key={i} className="px-3 py-2 flex items-start gap-2">
+                        <span className="text-red-500 text-xs mt-0.5 shrink-0">–</span>
+                        <span className="text-xs font-mono text-slate-300 leading-snug">{r}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </Section>
         </>
       )}
 

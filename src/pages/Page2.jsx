@@ -16,19 +16,19 @@ function Section({ title, children }) {
   )
 }
 
-function StatusBadge({ status }) {
-  if (status === 'beats')  return <span className="text-[10px] font-mono font-bold text-green-400 whitespace-nowrap">▲ BEATS</span>
-  if (status === 'misses') return <span className="text-[10px] font-mono font-bold text-red-400   whitespace-nowrap">▼ MISS</span>
-  return                          <span className="text-[10px] font-mono font-bold text-amber-400 whitespace-nowrap">● CAU</span>
+function StatusBadge({ status, tr }) {
+  if (status === 'beats')  return <span className="text-[10px] font-mono font-bold text-green-400 whitespace-nowrap">▲ {tr.beats}</span>
+  if (status === 'misses') return <span className="text-[10px] font-mono font-bold text-red-400   whitespace-nowrap">▼ {tr.misses}</span>
+  return                          <span className="text-[10px] font-mono font-bold text-amber-400 whitespace-nowrap">● {tr.caution}</span>
 }
 
-function ratingConfig(score) {
-  if (score >= 67) return { bar: 'bg-green-500', text: 'text-green-400', label: 'BULLISH' }
-  if (score >= 34) return { bar: 'bg-amber-500', text: 'text-amber-400', label: 'NEUTRAL' }
-  return                  { bar: 'bg-red-500',   text: 'text-red-400',   label: 'BEARISH' }
+function ratingConfig(score, tr) {
+  if (score >= 67) return { bar: 'bg-green-500', text: 'text-green-400', label: tr.bullish }
+  if (score >= 34) return { bar: 'bg-amber-500', text: 'text-amber-400', label: tr.neutral }
+  return                  { bar: 'bg-red-500',   text: 'text-red-400',   label: tr.bearish }
 }
 
-function buildVerdict(data, lang) {
+function buildVerdict(data, tr, lang) {
   const score  = data.score ?? 50
   const ticker = data.ticker
   const up     = (data.changePct ?? 0) >= 0
@@ -42,12 +42,30 @@ function buildVerdict(data, lang) {
   return `${ticker} presents a ${level}-risk profile with a composite score of ${score}/100. Analysis shows ${sent}. Investors should weigh valuation and growth trends before positioning. This information is for educational purposes only.`
 }
 
+// ── Formatea un item de earningsRaw usando tr ─────────────────
+function fmtEarning(item, tr) {
+  if (item.type === 'eps')
+    return `${item.quarter}: EPS $${item.eps} vs est $${item.epsEst} — ${item.beat ? tr.beat : tr.miss}`
+  if (item.type === 'revenue')
+    return `${item.quarter}: ${tr.revenue} ${item.revenue} — ${tr.inlineWithEst}`
+  return ''
+}
+
+// ── Formatea un item de deliveryRaw usando tr ─────────────────
+function fmtDelivery(item, tr) {
+  if (item.type === 'units')
+    return `FY${item.year} ${tr.unitsLabel}: ${item.units} (+${item.growth}% YoY)`
+  if (item.type === 'guidance')
+    return `${tr.guidanceFor}${item.year}`
+  return ''
+}
+
 export default function Page2({ data, tr, lang }) {
   if (!data) return null
 
-  const { quarterlyData, earningsUpdates, deliveryUpdates, catalysts, risks, score } = data
-  const rc      = ratingConfig(score)
-  const verdict = buildVerdict(data, lang)
+  const { quarterlyData, earningsRaw, deliveryRaw, score } = data
+  const rc      = ratingConfig(score, tr)
+  const verdict = buildVerdict(data, tr, lang)
 
   return (
     <div className="flex flex-col gap-5">
@@ -82,7 +100,7 @@ export default function Page2({ data, tr, lang }) {
                       {q.margin != null ? `${q.margin}%` : '—'}
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <StatusBadge status={q.epsStatus} />
+                      <StatusBadge status={q.epsStatus} tr={tr} />
                     </td>
                   </tr>
                 ))}
@@ -96,20 +114,20 @@ export default function Page2({ data, tr, lang }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Section title={tr.earnings}>
           <div className="bg-[#0f1117] border border-[#1e2130] rounded-xl p-4 flex flex-col gap-2.5">
-            {earningsUpdates.map((u, i) => (
+            {(earningsRaw ?? []).map((item, i) => (
               <div key={i} className="flex gap-2.5">
                 <span className="text-blue-500 shrink-0 mt-0.5 select-none">›</span>
-                <span className="text-slate-300 font-mono text-xs leading-relaxed">{u}</span>
+                <span className="text-slate-300 font-mono text-xs leading-relaxed">{fmtEarning(item, tr)}</span>
               </div>
             ))}
           </div>
         </Section>
         <Section title={tr.deliveries}>
           <div className="bg-[#0f1117] border border-[#1e2130] rounded-xl p-4 flex flex-col gap-2.5">
-            {deliveryUpdates.map((u, i) => (
+            {(deliveryRaw ?? []).map((item, i) => (
               <div key={i} className="flex gap-2.5">
                 <span className="text-blue-500 shrink-0 mt-0.5 select-none">›</span>
-                <span className="text-slate-300 font-mono text-xs leading-relaxed">{u}</span>
+                <span className="text-slate-300 font-mono text-xs leading-relaxed">{fmtDelivery(item, tr)}</span>
               </div>
             ))}
           </div>
@@ -120,7 +138,7 @@ export default function Page2({ data, tr, lang }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Section title={tr.catalysts}>
           <div className="bg-[#0f1117] border border-green-400/20 rounded-xl p-4 flex flex-col gap-2.5">
-            {catalysts.map((c, i) => (
+            {tr.catalystsList.map((c, i) => (
               <div key={i} className="flex gap-2.5">
                 <span className="text-green-400 shrink-0 font-mono select-none">+</span>
                 <span className="text-slate-300 font-sans text-sm leading-relaxed">{c}</span>
@@ -130,7 +148,7 @@ export default function Page2({ data, tr, lang }) {
         </Section>
         <Section title={tr.risks}>
           <div className="bg-[#0f1117] border border-red-400/20 rounded-xl p-4 flex flex-col gap-2.5">
-            {risks.map((r, i) => (
+            {tr.risksList.map((r, i) => (
               <div key={i} className="flex gap-2.5">
                 <span className="text-red-400 shrink-0 font-mono select-none">−</span>
                 <span className="text-slate-300 font-sans text-sm leading-relaxed">{r}</span>

@@ -29,10 +29,10 @@ function buildReportText(data, tr) {
     `${tr.revenueGrowth}: ${data.growth.revenueGrowth}% | ${tr.epsGrowth}: ${data.growth.epsGrowth}% | ${tr.returnEquity}: ${data.growth.returnEquity}%`,
     '',
     `--- ${tr.catalysts} ---`,
-    ...data.catalysts.map(c => `+ ${c}`),
+    ...tr.catalystsList.map(c => `+ ${c}`),
     '',
     `--- ${tr.risks} ---`,
-    ...data.risks.map(r => `- ${r}`),
+    ...tr.risksList.map(r => `- ${r}`),
   ].join('\n')
 }
 

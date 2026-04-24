@@ -92,25 +92,13 @@ function buildFallback(ticker) {
       margin:    detFloat(s + i * 11, 5, 35),
       epsStatus: ['beats','beats','misses','caution'][i % 4],
     })),
-    catalysts: [
-      'Strong free cash flow generation',
-      'Market share expansion in core segments',
-      'New product cycle underway',
-      'Analyst upgrades accelerating',
+    earningsRaw: [
+      { type: 'eps',     quarter: 'Q4 2024', eps: fmt(detFloat(s, 0.5, 8)), epsEst: fmt(detFloat(s ^ 1, 0.4, 7.8)), beat: detFloat(s, 0, 1) > 0.5 },
+      { type: 'revenue', quarter: 'Q3 2024', revenue: fmtBig(Math.round(detFloat(s ^ 2, 1e9, 50e9))) },
     ],
-    risks: [
-      'Macro headwinds may pressure margins',
-      'Elevated valuation vs. sector peers',
-      'Regulatory scrutiny increasing',
-      'FX exposure in emerging markets',
-    ],
-    earningsUpdates: [
-      `Q4 2024: EPS $${fmt(detFloat(s, 0.5, 8))} vs est $${fmt(detFloat(s ^ 1, 0.4, 7.8))} — ${detFloat(s, 0, 1) > 0.5 ? 'Beat' : 'Miss'}`,
-      `Q3 2024: Revenue ${fmtBig(Math.round(detFloat(s ^ 2, 1e9, 50e9)))} — inline with estimates`,
-    ],
-    deliveryUpdates: [
-      `FY2024 units: ${Math.round(detFloat(s ^ 3, 1e4, 5e6)).toLocaleString()} (+${fmt(detFloat(s ^ 4, 5, 30))}% YoY)`,
-      'Guidance maintained for FY2025',
+    deliveryRaw: [
+      { type: 'units',    year: 2024, units: Math.round(detFloat(s ^ 3, 1e4, 5e6)).toLocaleString(), growth: fmt(detFloat(s ^ 4, 5, 30)) },
+      { type: 'guidance', year: 2025 },
     ],
   }
 }
@@ -158,13 +146,11 @@ async function fetchLive(ticker) {
       returnEquity: live.returnOnEquity ?? fb.growth.returnEquity,
     },
 
-    scores:          fb.scores,
-    chartPrices:     live.chartPrices   ?? fb.chartPrices,
-    quarterlyData:   live.quarterlyData ?? fb.quarterlyData,
-    catalysts:       fb.catalysts,
-    risks:           fb.risks,
-    earningsUpdates: fb.earningsUpdates,
-    deliveryUpdates: fb.deliveryUpdates,
+    scores:        fb.scores,
+    chartPrices:   live.chartPrices   ?? fb.chartPrices,
+    quarterlyData: live.quarterlyData ?? fb.quarterlyData,
+    earningsRaw:   fb.earningsRaw,
+    deliveryRaw:   fb.deliveryRaw,
 
     source:       live.source,
     hasLivePrice: true,
