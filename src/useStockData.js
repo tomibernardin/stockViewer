@@ -5,29 +5,42 @@ function fmt(n, digits = 2) {
   if (n == null || isNaN(n)) return null
   return parseFloat(n.toFixed(digits))
 }
-
 function fmtBig(n) {
   if (n == null) return '—'
   const abs = Math.abs(n)
   if (abs >= 1e12) return (n / 1e12).toFixed(2) + 'T'
-  if (abs >= 1e9)  return (n / 1e9).toFixed(2) + 'B'
-  if (abs >= 1e6)  return (n / 1e6).toFixed(2) + 'M'
+  if (abs >= 1e9)  return (n / 1e9).toFixed(2)  + 'B'
+  if (abs >= 1e6)  return (n / 1e6).toFixed(2)  + 'M'
   return n.toLocaleString()
 }
 
-// Generador determinístico para datos que no trae la API
+// ── Score (fórmula corregida — usa valores en %) ─────────────
+// debtEq, revenueGrowth, returnOnEquity llegan como % (ej: 102.63, 5.12, 147.7)
+function computeScore(d) {
+  if (!d.pe && !d.revenueGrowth && !d.returnOnEquity) return null
+  const pe  = d.pe             ?? 20
+  const de  = d.debtEq         ?? 0    // % → dividir por 100 para la fórmula
+  const rev = d.revenueGrowth  ?? 0    // % → dividir por 100
+  const roe = d.returnOnEquity ?? 0    // % → dividir por 100
+  const raw = 50
+    - (de  / 100) * 2
+    + (rev / 100) * 30
+    + (roe / 100) * 10
+    - Math.max(0, pe - 20) * 0.5
+  return Math.min(100, Math.max(0, Math.round(raw)))
+}
+
+// ── Generador determinístico para datos no disponibles ───────
 function seed(ticker) {
   let h = 0
   for (let i = 0; i < ticker.length; i++) h = (h * 31 + ticker.charCodeAt(i)) | 0
   return Math.abs(h)
 }
-
 function detFloat(s, min, max, dec = 2) {
   const x = ((s * 9301 + 49297) % 233280) / 233280
   return parseFloat((min + x * (max - min)).toFixed(dec))
 }
 
-// ── Fallback completo (cuando el proxy falla totalmente) ──────
 function buildFallback(ticker) {
   const s     = seed(ticker)
   const price = detFloat(s, 10, 800)
@@ -38,10 +51,8 @@ function buildFallback(ticker) {
     const noise = detFloat(s + i * 17, -price * 0.05, price * 0.05)
     return parseFloat((base + trend + noise).toFixed(2))
   })
-
   return {
-    ticker,
-    price,
+    ticker, price,
     change:    fmt(detFloat(s ^ 0xff, -8, 8)),
     changePct: fmt(detFloat(s ^ 0xab, -5, 5)),
     volume:    fmtBig(Math.round(detFloat(s ^ 0x3, 1e6, 100e6))),
@@ -101,123 +112,75 @@ function buildFallback(ticker) {
       `FY2024 units: ${Math.round(detFloat(s ^ 3, 1e4, 5e6)).toLocaleString()} (+${fmt(detFloat(s ^ 4, 5, 30))}% YoY)`,
       'Guidance maintained for FY2025',
     ],
-    isFallback: true,
   }
 }
 
-// ── Normaliza la respuesta del proxy ─────────────────────────
-// Usa el chart meta para precio/volumen (siempre disponible)
-// y quoteSummary para fundamentales (best-effort con crumb)
+// ── Fetch normalizado desde el proxy ─────────────────────────
+// El backend ya devuelve datos normalizados (flat).
+// El hook los mapea a la estructura que usan los componentes.
 async function fetchLive(ticker) {
   const res = await fetch(`/api/quote?symbol=${encodeURIComponent(ticker)}`)
   if (!res.ok) throw new Error(`api ${res.status}`)
-  const { summary, chart } = await res.json()
+  const live = await res.json()
+  if (!live.price) throw new Error('no price data')
 
-  // Chart meta — siempre disponible sin crumb
-  const meta   = chart?.chart?.result?.[0]?.meta ?? {}
-  const closes = chart?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? []
-  const chartPrices = closes.map(v => (v ? parseFloat(v.toFixed(2)) : null)).filter(Boolean)
-
-  // quoteSummary — disponible solo cuando el crumb funciona
-  const r  = summary?.quoteSummary?.result?.[0] ?? null
-  const sd = r?.summaryDetail        ?? {}
-  const ks = r?.defaultKeyStatistics ?? {}
-  const fd = r?.financialData        ?? {}
-  const earn = r?.earnings?.financialsChart?.quarterly ?? []
-
-  const hasSummary = !!r
-
-  const fb    = buildFallback(ticker)
-  const price = meta.regularMarketPrice ?? sd.regularMarketPrice?.raw ?? fb.price
-
-  const score = hasSummary
-    ? Math.min(100, Math.max(0, Math.round(
-        50
-        - (fd.debtToEquity?.raw   ?? 0) * 2
-        + (fd.revenueGrowth?.raw  ?? 0) * 30
-        + (fd.returnOnEquity?.raw ?? 0) * 10
-        - Math.max(0, (sd.trailingPE?.raw ?? 20) - 20) * 0.5
-      )))
-    : fb.score
+  const fb = buildFallback(ticker)
+  const score = computeScore(live) ?? fb.score
 
   return {
     ticker,
-    price:     fmt(price),
-    change:    fmt(meta.regularMarketChange ?? sd.regularMarketChange?.raw),
-    // Yahoo chart devuelve regularMarketChangePercent como decimal (0.0123 = 1.23%) → × 100
-    // quoteSummary también lo devuelve como decimal → × 100
-    changePct: fmt(
-      meta.regularMarketChangePercent != null
-        ? meta.regularMarketChangePercent * 100
-        : sd.regularMarketChangePercent?.raw != null
-          ? sd.regularMarketChangePercent.raw * 100
-          : null
-    ),
-    volume:    fmtBig(meta.regularMarketVolume  ?? sd.regularMarketVolume?.raw),
-    marketCap: fmtBig(meta.marketCap            ?? sd.marketCap?.raw),
-    week52High:fmt(meta.fiftyTwoWeekHigh        ?? sd.fiftyTwoWeekHigh?.raw),
-    week52Low: fmt(meta.fiftyTwoWeekLow         ?? sd.fiftyTwoWeekLow?.raw),
-    score:     isNaN(score) ? fb.score : score,
+    price:     live.price,
+    change:    live.change,
+    changePct: live.changePct,
+    volume:    live.volume    ?? fb.volume,
+    marketCap: live.marketCap ?? fb.marketCap,
+    week52High:live.week52High ?? fb.week52High,
+    week52Low: live.week52Low  ?? fb.week52Low,
+    score,
 
-    // Fundamentales: reales si hay quoteSummary, seed si no
-    valuation: hasSummary ? {
-      pe:        fmt(sd.trailingPE?.raw),
-      pb:        fmt(sd.priceToBook?.raw ?? ks.priceToBook?.raw),
-      ps:        fmt(ks.priceToSalesTrailing12Months?.raw),
-      ev_ebitda: fmt(ks.enterpriseToEbitda?.raw),
-    } : fb.valuation,
+    // Estructura anidada que usan Page1 / Page2 / App
+    valuation: {
+      pe:        live.pe        ?? fb.valuation.pe,
+      pb:        live.pb        ?? fb.valuation.pb,
+      ps:        live.ps        ?? fb.valuation.ps,
+      ev_ebitda: live.evEbitda  ?? fb.valuation.ev_ebitda,
+    },
+    financial: {
+      debtEq:      live.debtEq       ?? fb.financial.debtEq,
+      currentRatio:live.currentRatio ?? fb.financial.currentRatio,
+      interestCov: live.interestCov  ?? fb.financial.interestCov,
+      freeCashFlow:live.freeCashFlow ?? fb.financial.freeCashFlow,
+    },
+    growth: {
+      revenueGrowth:live.revenueGrowth  ?? fb.growth.revenueGrowth,
+      epsGrowth:    live.epsGrowth      ?? fb.growth.epsGrowth,
+      marginTrend:  live.marginTrend    ?? fb.growth.marginTrend,
+      returnEquity: live.returnOnEquity ?? fb.growth.returnEquity,
+    },
 
-    financial: hasSummary ? {
-      debtEq:      fmt(fd.debtToEquity?.raw),
-      currentRatio:fmt(fd.currentRatio?.raw),
-      interestCov: fmt(fd.ebitda?.raw && fd.totalDebt?.raw
-        ? fd.ebitda.raw / (fd.totalDebt.raw * 0.05) : null),
-      freeCashFlow:fmtBig(fd.freeCashflow?.raw),
-    } : fb.financial,
-
-    growth: hasSummary ? {
-      revenueGrowth:fmt((fd.revenueGrowth?.raw   ?? 0) * 100),
-      epsGrowth:    fmt((fd.earningsGrowth?.raw   ?? 0) * 100),
-      marginTrend:  fmt((fd.grossMargins?.raw     ?? 0) * 100),
-      returnEquity: fmt((fd.returnOnEquity?.raw   ?? 0) * 100),
-    } : fb.growth,
-
-    scores: fb.scores,
-    chartPrices: chartPrices.length >= 3 ? chartPrices : fb.chartPrices,
-
-    quarterlyData: earn.length
-      ? earn.slice(-4).map(q => ({
-          quarter:   q.date,
-          revenue:   fmtBig(q.revenue?.raw),
-          eps:       fmt(q.earnings?.raw),
-          netIncome: '—',
-          margin:    null,
-          epsStatus: (q.earnings?.raw ?? 0) > 0 ? 'beats' : 'misses',
-        }))
-      : fb.quarterlyData,
-
+    scores:          fb.scores,
+    chartPrices:     live.chartPrices   ?? fb.chartPrices,
+    quarterlyData:   live.quarterlyData ?? fb.quarterlyData,
     catalysts:       fb.catalysts,
     risks:           fb.risks,
     earningsUpdates: fb.earningsUpdates,
     deliveryUpdates: fb.deliveryUpdates,
-    // Modo parcial: hay datos reales de precio pero fundamentales son estimados
-    isFallback: !hasSummary,
-    hasLivePrice: !!meta.regularMarketPrice,
+
+    source:       live.source,
+    hasLivePrice: true,
+    isFallback:   live.source !== 'yahoo_full',
   }
 }
 
 // ── Hook principal ───────────────────────────────────────────
-// Intervalo de auto-refresh: 60s (Yahoo Finance actualiza precios cada ~15-60s).
-// En el refresh silencioso no mostramos spinner — solo actualizamos los datos.
 const REFRESH_INTERVAL_MS = 60_000
 
 export function useStockData(ticker) {
-  const [data,      setData]      = useState(null)
-  const [loading,   setLoading]   = useState(true)
-  const [error,     setError]     = useState(null)
-  const [lastUpdate,setLastUpdate]= useState(null)
+  const [data,       setData]      = useState(null)
+  const [loading,    setLoading]   = useState(true)
+  const [error,      setError]     = useState(null)
+  const [lastUpdate, setLastUpdate]= useState(null)
 
-  // Carga inicial (con spinner) o silent refresh (sin spinner)
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
     setError(null)
@@ -225,7 +188,6 @@ export function useStockData(ticker) {
       const d = await fetchLive(ticker)
       setData(d)
       setLastUpdate(new Date())
-      if (!d.hasLivePrice) setError('live')
     } catch {
       if (!silent) {
         setData(buildFallback(ticker))
@@ -236,13 +198,10 @@ export function useStockData(ticker) {
     }
   }, [ticker])
 
-  // Carga inicial al montar o cambiar ticker
   useEffect(() => { load() }, [load])
-
-  // Auto-refresh cada 60s (no muestra spinner)
   useEffect(() => {
     const id = setInterval(() => load(true), REFRESH_INTERVAL_MS)
-    return () => clearInterval(id)  // cleanup al desmontar o cambiar ticker
+    return () => clearInterval(id)
   }, [load])
 
   return { data, loading, error, lastUpdate, reload: load }

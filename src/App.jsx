@@ -80,15 +80,25 @@ export default function App() {
 
         {!loading && (
           <>
-            {/* Banner de datos simulados */}
-            {error && !data?.hasLivePrice && (
+            {/* Banners de fuente de datos */}
+            {error && (
               <div className="mb-4 px-3 py-2.5 bg-amber-400/10 border border-amber-400/30 rounded-lg text-xs font-mono text-amber-400 leading-relaxed">
                 ⚠ Live data unavailable — showing simulated data for {ticker}
               </div>
             )}
-            {data?.hasLivePrice && data?.isFallback && (
+            {!error && data?.source === 'yahoo_price' && (
               <div className="mb-4 px-3 py-2.5 bg-blue-400/10 border border-blue-400/30 rounded-lg text-xs font-mono text-blue-400 leading-relaxed">
-                ℹ Live price data · Fundamentals are estimated
+                ℹ Live price · Fundamentals estimated (crumb unavailable)
+              </div>
+            )}
+            {!error && data?.source === 'yahoo+finnhub' && (
+              <div className="mb-4 px-3 py-2.5 bg-cyan-400/10 border border-cyan-400/30 rounded-lg text-xs font-mono text-cyan-400 leading-relaxed">
+                ⚡ Live price via Yahoo · Fundamentals via Finnhub
+              </div>
+            )}
+            {!error && data?.source === 'finnhub' && (
+              <div className="mb-4 px-3 py-2.5 bg-violet-400/10 border border-violet-400/30 rounded-lg text-xs font-mono text-violet-400 leading-relaxed">
+                ⚡ All data via Finnhub (Yahoo Finance unavailable)
               </div>
             )}
 
@@ -106,7 +116,11 @@ export default function App() {
                 </span>
                 {lastUpdate && (
                   <span className="text-[9px] font-mono text-slate-700 truncate">
-                    {data?.hasLivePrice ? '● live' : '○ simulated'} · {lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    {data?.source === 'yahoo_full'    ? '● yahoo'   :
+                     data?.source === 'yahoo+finnhub' ? '● hybrid'  :
+                     data?.source === 'finnhub'        ? '● finnhub' :
+                     data?.source === 'yahoo_price'    ? '◐ partial' :
+                     '○ simulated'} · {lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                   </span>
                 )}
               </div>
