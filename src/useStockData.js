@@ -143,8 +143,16 @@ async function fetchLive(ticker) {
   return {
     ticker,
     price:     fmt(price),
-    change:    fmt(meta.regularMarketChange     ?? sd.regularMarketChange?.raw),
-    changePct: fmt((meta.regularMarketChangePercent ?? (sd.regularMarketChangePercent?.raw ?? 0)) ),
+    change:    fmt(meta.regularMarketChange ?? sd.regularMarketChange?.raw),
+    // Yahoo chart devuelve regularMarketChangePercent como decimal (0.0123 = 1.23%) → × 100
+    // quoteSummary también lo devuelve como decimal → × 100
+    changePct: fmt(
+      meta.regularMarketChangePercent != null
+        ? meta.regularMarketChangePercent * 100
+        : sd.regularMarketChangePercent?.raw != null
+          ? sd.regularMarketChangePercent.raw * 100
+          : null
+    ),
     volume:    fmtBig(meta.regularMarketVolume  ?? sd.regularMarketVolume?.raw),
     marketCap: fmtBig(meta.marketCap            ?? sd.marketCap?.raw),
     week52High:fmt(meta.fiftyTwoWeekHigh        ?? sd.fiftyTwoWeekHigh?.raw),
