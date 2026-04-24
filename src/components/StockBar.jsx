@@ -33,11 +33,11 @@ export default function StockBar({ data, tr }) {
       <div className="bg-[#0f1117] border border-[#1e2130] rounded-lg p-3">
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-x-3 gap-y-3">
           {items.map(({ label, value, color }) => (
-            <div key={label} className="flex flex-col min-w-0">
-              <span className="text-[10px] text-slate-500 uppercase tracking-wider font-mono truncate">
+            <div key={label} className="flex flex-col min-w-0 items-center text-center">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wider font-mono truncate w-full">
                 {label}
               </span>
-              <span className={`font-mono text-sm font-semibold truncate ${color}`}>
+              <span className={`font-mono text-sm font-semibold truncate w-full ${color}`}>
                 {value}
               </span>
             </div>
