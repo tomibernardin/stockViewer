@@ -1,7 +1,4 @@
 export const TICKERS = [
-  { symbol: 'AL30',  name: 'Bono Argentina 2030',    type: 'bond' },
-  { symbol: 'AL35',  name: 'Bono Argentina 2035',    type: 'bond' },
-  { symbol: 'AL41',  name: 'Bono Argentina 2041',    type: 'bond' },
   { symbol: 'GGAL',  name: 'Grupo Financiero Galicia', type: 'arg' },
   { symbol: 'LOMA',  name: 'Loma Negra',              type: 'arg' },
   { symbol: 'PAMP',  name: 'Pampa Energía',           type: 'arg' },
@@ -37,7 +34,6 @@ export const TICKERS = [
 ]
 
 export const TICKER_GROUPS = [
-  { label: 'Argentine Bonds', types: ['bond'] },
   { label: 'Argentina', types: ['arg'] },
   { label: 'LatAm', types: ['latam'] },
   { label: 'US Blue Chip', types: ['us'] },
