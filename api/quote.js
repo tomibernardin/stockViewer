@@ -1,15 +1,20 @@
 // ============================================================
 // api/quote.js — Vercel Serverless Function (Node 18)
-// Proxy con failover: Yahoo Finance → Finnhub
+// Proxy con failover: Yahoo Finance (BYMA .BA) → Finnhub
+//
+// Precios SIEMPRE en ARS desde BYMA:
+//   baSymbol  = {ticker}.BA  — Yahoo Finance BYMA
+//   fundTicker = ticker subyacente US para fundamentales
+//     (ej: YPFD→YPF, PAMP→PAM; el resto igual)
 //
 // Fuentes (en orden de prioridad):
-//   yahoo_full    — Yahoo chart + quoteSummary (crumb ok)
-//   yahoo+finnhub — Yahoo chart (precio) + Finnhub (fundamentales)
-//   finnhub       — Todo desde Finnhub (Yahoo chart falló)
-//   [502]         — Ninguna fuente disponible (frontend usa seed)
+//   byma_full    — BYMA precio + Yahoo US fundamentales
+//   byma+finnhub — BYMA precio + Finnhub fundamentales
+//   byma_price   — BYMA precio sin fundamentales
+//   [502]        — Ninguna fuente (frontend usa seed)
 //
-// Vars de entorno necesarias:
-//   FINNHUB_API_KEY — (opcional) obtener en finnhub.io/dashboard
+// Vars de entorno:
+//   FINNHUB_API_KEY — (opcional) finnhub.io/dashboard
 // ============================================================
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
@@ -17,6 +22,13 @@ const HEADERS_BASE = {
   'User-Agent': UA,
   'Accept': 'application/json, text/html,*/*;q=0.8',
   'Accept-Language': 'en-US,en;q=0.9',
+}
+
+// ── Mapeo BYMA → ticker subyacente US para fundamentales ────
+// Sólo se necesita cuando el símbolo BYMA difiere del NYSE/NASDAQ
+const FUND_MAP = {
+  YPFD: 'YPF',  // YPFD en BYMA = YPF en NYSE
+  PAMP: 'PAM',  // PAMP en BYMA = PAM en NYSE
 }
 
 // ── Helpers de formato ───────────────────────────────────────
@@ -39,9 +51,9 @@ function isValidCrumb(s) {
 
 // ── Caché en memoria (warm instance) ────────────────────────
 let   _session    = null
-const _priceCache = new Map()   // ticker → { data, expiresAt }  45 s
-const _fundCache  = new Map()   // ticker → { data, expiresAt }   5 min
-const _fhCache    = new Map()   // ticker → { data, expiresAt }  60 s
+const _priceCache = new Map()   // baSymbol  → { data, expiresAt }  45 s
+const _fundCache  = new Map()   // fundTicker → { data, expiresAt }   5 min
+const _fhCache    = new Map()   // fundTicker → { data, expiresAt }  60 s
 
 // ── Crumb session ────────────────────────────────────────────
 async function tryCrumb(originUrl) {
@@ -66,6 +78,7 @@ async function getSession(forceRefresh = false) {
 }
 
 // ── Normalizar desde Yahoo ───────────────────────────────────
+// meta/closes vienen del .BA (precio ARS); sd/ks/fd/earn del subyacente US
 function normalizeYahoo(meta, sd, ks, fd, earn, closes, hasFund) {
   const chartPrices = (closes ?? []).filter(Boolean).map(v => parseFloat(v.toFixed(2)))
   return {
@@ -96,44 +109,15 @@ function normalizeYahoo(meta, sd, ks, fd, earn, closes, hasFund) {
       quarter: q.date, revenue: fmtBig(q.revenue?.raw), eps: fmt(q.earnings?.raw),
       netIncome: '—', margin: null, epsStatus: (q.earnings?.raw ?? 0) > 0 ? 'beats' : 'misses',
     })) : null,
-    source: hasFund ? 'yahoo_full' : 'yahoo_price',
+    currency: 'ARS',
+    source: hasFund ? 'byma_full' : 'byma_price',
   }
 }
 
-// ── Normalizar desde Finnhub ─────────────────────────────────
-function normalizeFinnhub(q, m, p, candle) {
-  const chartPrices = candle?.s === 'ok'
-    ? (candle.c ?? []).filter(Boolean).map(v => parseFloat(v.toFixed(2))) : null
+// ── Normalizar desde Finnhub (fundamentales sólo) ───────────
+// Se combina con el precio BYMA, así que no hay `source` aquí
+function finnhubFundamentals(m, p) {
   return {
-    price:     fmt(q.c),
-    change:    fmt(q.d),
-    changePct: fmt(q.dp),    // Finnhub ya da porcentaje
-    volume:    null,
-    marketCap: p.marketCapitalization ? fmtBig(p.marketCapitalization * 1e6) : null,
-    week52High: fmt(m['52WeekHigh']),
-    week52Low:  fmt(m['52WeekLow']),
-    pe:        fmt(m.peBasicExclExtraTTM ?? m.peTTM),
-    pb:        fmt(m.pbAnnual ?? m.pbQuarterly),
-    ps:        fmt(m.psAnnual ?? m.psTTM),
-    evEbitda:  fmt(m.evEbitdaTTM ?? m.evEbitdaAnnual),
-    debtEq:    fmt(m['totalDebt/totalEquityAnnual'] ?? m['totalDebt/totalEquityQuarterly']),
-    currentRatio: fmt(m.currentRatioAnnual ?? m.currentRatioQuarterly),
-    interestCov:  null,
-    freeCashFlow: m.freeCashFlowAnnual ? fmtBig(m.freeCashFlowAnnual * 1e6) : null,
-    revenueGrowth:  m.revenueGrowthTTMYoy != null ? fmt(m.revenueGrowthTTMYoy * 100) : null,
-    epsGrowth:      null,
-    marginTrend:    fmt(m.grossMarginTTM ?? m.grossMarginAnnual),
-    returnOnEquity: fmt(m.roeTTM ?? m.roeAnnual),
-    chartPrices: chartPrices?.length >= 3 ? chartPrices : null,
-    quarterlyData: null,
-    source: 'finnhub',
-  }
-}
-
-// ── Merge: Yahoo precio + Finnhub fundamentales ──────────────
-function mergeYahooFinnhub(yahooBase, m, p) {
-  return {
-    ...yahooBase,
     pe:        fmt(m.peBasicExclExtraTTM ?? m.peTTM),
     pb:        fmt(m.pbAnnual ?? m.pbQuarterly),
     ps:        fmt(m.psAnnual ?? m.psTTM),
@@ -146,66 +130,78 @@ function mergeYahooFinnhub(yahooBase, m, p) {
     epsGrowth:      null,
     marginTrend:    fmt(m.grossMarginTTM ?? m.grossMarginAnnual),
     returnOnEquity: fmt(m.roeTTM ?? m.roeAnnual),
-    source: 'yahoo+finnhub',
+    week52High: fmt(m['52WeekHigh']),
+    week52Low:  fmt(m['52WeekLow']),
+  }
+}
+
+// ── Merge: BYMA precio + Finnhub fundamentales ───────────────
+function mergeBymaFinnhub(bymaBase, m, p) {
+  return {
+    ...bymaBase,
+    ...finnhubFundamentals(m, p),
+    // Si BYMA no reportó 52W, usar Finnhub
+    week52High: bymaBase.week52High ?? fmt(m['52WeekHigh']),
+    week52Low:  bymaBase.week52Low  ?? fmt(m['52WeekLow']),
+    currency: 'ARS',
+    source: 'byma+finnhub',
   }
 }
 
 export default async function handler(req, res) {
   const { symbol } = req.query
   if (!symbol) return res.status(400).json({ error: 'symbol required' })
-  const ticker = symbol.toUpperCase()
+
+  const ticker     = symbol.toUpperCase()
+  const baSymbol   = `${ticker}.BA`               // Yahoo BYMA — precio ARS
+  const fundTicker = FUND_MAP[ticker] ?? ticker    // Subyacente US para fundamentales
   const FINNHUB_KEY = process.env.FINNHUB_API_KEY || ''
 
   try {
-    // ── 1. Yahoo chart (precio, sin crumb) ──────────────────
-    let chartBody = _priceCache.get(ticker)?.expiresAt > Date.now()
-      ? _priceCache.get(ticker).data : null
+    // ── 1. Yahoo chart desde BYMA (.BA) — precio en ARS ────
+    let chartBody = _priceCache.get(baSymbol)?.expiresAt > Date.now()
+      ? _priceCache.get(baSymbol).data : null
 
     if (!chartBody) {
       const cr = await fetch(
-        `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1mo&range=1y`,
+        `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(baSymbol)}?interval=1mo&range=1y`,
         { headers: HEADERS_BASE, signal: AbortSignal.timeout(10_000) }
       )
       if (cr.status === 429) throw new Error('429 rate limited')
       chartBody = cr.ok ? await cr.json() : null
-      if (chartBody?.chart?.result?.[0]) _priceCache.set(ticker, { data: chartBody, expiresAt: Date.now() + 45_000 })
+      if (chartBody?.chart?.result?.[0]) _priceCache.set(baSymbol, { data: chartBody, expiresAt: Date.now() + 45_000 })
     }
 
-    const chartResult = chartBody?.chart?.result?.[0]
-    const meta   = chartResult?.meta ?? {}
-    const closes = chartResult?.indicators?.quote?.[0]?.close ?? []
-    const yahooHasPrice = !!meta.regularMarketPrice
+    const chartResult   = chartBody?.chart?.result?.[0]
+    const meta          = chartResult?.meta ?? {}
+    const closes        = chartResult?.indicators?.quote?.[0]?.close ?? []
+    const bymaHasPrice  = !!meta.regularMarketPrice
 
-    // ── 2. Yahoo quoteSummary (fundamentales, con crumb) ────
-    let summaryResult = _fundCache.get(ticker)?.expiresAt > Date.now()
-      ? _fundCache.get(ticker).data : null
+    // ── 2. Yahoo quoteSummary desde ticker subyacente US ───
+    let summaryResult = _fundCache.get(fundTicker)?.expiresAt > Date.now()
+      ? _fundCache.get(fundTicker).data : null
 
-    if (!summaryResult && yahooHasPrice) {
+    if (!summaryResult && bymaHasPrice) {
       try {
         let session = await getSession()
         if (session.crumb) {
           const modules = 'summaryDetail,defaultKeyStatistics,financialData,earnings'
-          const sr = await fetch(
-            `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}` +
-            `?modules=${modules}&crumb=${encodeURIComponent(session.crumb)}`,
-            { headers: { ...HEADERS_BASE, Cookie: session.cookie }, signal: AbortSignal.timeout(10_000) }
-          )
-          if (sr.status === 401) {
-            session = await getSession(true)
-            if (session.crumb) {
-              const sr2 = await fetch(
-                `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}` +
-                `?modules=${modules}&crumb=${encodeURIComponent(session.crumb)}`,
-                { headers: { ...HEADERS_BASE, Cookie: session.cookie }, signal: AbortSignal.timeout(10_000) }
-              )
-              if (sr2.ok) summaryResult = (await sr2.json())?.quoteSummary?.result?.[0] ?? null
-            }
-          } else if (sr.ok) {
-            summaryResult = (await sr.json())?.quoteSummary?.result?.[0] ?? null
+          const fetchSummary = async (crumb, cookie) => {
+            const sr = await fetch(
+              `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(fundTicker)}` +
+              `?modules=${modules}&crumb=${encodeURIComponent(crumb)}`,
+              { headers: { ...HEADERS_BASE, Cookie: cookie }, signal: AbortSignal.timeout(10_000) }
+            )
+            return sr.ok ? (await sr.json())?.quoteSummary?.result?.[0] ?? null : null
           }
-          if (summaryResult) _fundCache.set(ticker, { data: summaryResult, expiresAt: Date.now() + 5 * 60_000 })
+          summaryResult = await fetchSummary(session.crumb, session.cookie)
+          if (!summaryResult) {
+            session = await getSession(true)
+            if (session.crumb) summaryResult = await fetchSummary(session.crumb, session.cookie)
+          }
+          if (summaryResult) _fundCache.set(fundTicker, { data: summaryResult, expiresAt: Date.now() + 5 * 60_000 })
         }
-      } catch { /* fundamentales son best-effort */ }
+      } catch { /* fundamentales best-effort */ }
     }
 
     const sd   = summaryResult?.summaryDetail        ?? {}
@@ -217,63 +213,37 @@ export default async function handler(req, res) {
     // ── 3. Decisión de fuente ────────────────────────────────
     let payload
 
-    if (yahooHasPrice && hasFund) {
-      // Caso A: Yahoo completo
+    if (bymaHasPrice && hasFund) {
+      // Caso A: BYMA precio (ARS) + Yahoo US fundamentales
       payload = normalizeYahoo(meta, sd, ks, fd, earn, closes, true)
 
-    } else if (yahooHasPrice && !hasFund && FINNHUB_KEY) {
-      // Caso B: Yahoo precio + Finnhub fundamentales
-      let fhData = _fhCache.get(ticker)?.expiresAt > Date.now()
-        ? _fhCache.get(ticker).data : null
+    } else if (bymaHasPrice && !hasFund && FINNHUB_KEY) {
+      // Caso B: BYMA precio (ARS) + Finnhub fundamentales
+      let fhData = _fhCache.get(fundTicker)?.expiresAt > Date.now()
+        ? _fhCache.get(fundTicker).data : null
       if (!fhData) {
         try {
           const FH = `https://finnhub.io/api/v1`
           const [mRes, pRes] = await Promise.allSettled([
-            fetch(`${FH}/stock/metric?symbol=${encodeURIComponent(ticker)}&metric=all&token=${FINNHUB_KEY}`, { signal: AbortSignal.timeout(8_000) }),
-            fetch(`${FH}/stock/profile2?symbol=${encodeURIComponent(ticker)}&token=${FINNHUB_KEY}`,          { signal: AbortSignal.timeout(8_000) }),
+            fetch(`${FH}/stock/metric?symbol=${encodeURIComponent(fundTicker)}&metric=all&token=${FINNHUB_KEY}`, { signal: AbortSignal.timeout(8_000) }),
+            fetch(`${FH}/stock/profile2?symbol=${encodeURIComponent(fundTicker)}&token=${FINNHUB_KEY}`,          { signal: AbortSignal.timeout(8_000) }),
           ])
           const mBody = mRes.status === 'fulfilled' && mRes.value.ok ? await mRes.value.json() : {}
           const pBody = pRes.status === 'fulfilled' && pRes.value.ok ? await pRes.value.json() : {}
           fhData = { m: mBody.metric ?? {}, p: pBody }
-          _fhCache.set(ticker, { data: fhData, expiresAt: Date.now() + 60_000 })
+          _fhCache.set(fundTicker, { data: fhData, expiresAt: Date.now() + 60_000 })
         } catch { fhData = { m: {}, p: {} } }
       }
-      const yahooBase = normalizeYahoo(meta, {}, {}, {}, [], closes, false)
-      payload = mergeYahooFinnhub(yahooBase, fhData.m, fhData.p)
+      const bymaBase = normalizeYahoo(meta, {}, {}, {}, [], closes, false)
+      payload = mergeBymaFinnhub(bymaBase, fhData.m, fhData.p)
 
-    } else if (yahooHasPrice && !hasFund) {
-      // Caso C: Yahoo precio sin fundamentales, sin Finnhub
+    } else if (bymaHasPrice) {
+      // Caso C: BYMA precio sin fundamentales, sin Finnhub key
       payload = normalizeYahoo(meta, sd, ks, fd, earn, closes, false)
 
-    } else if (!yahooHasPrice && FINNHUB_KEY) {
-      // Caso D: Finnhub completo
-      let fhData = _fhCache.get(ticker)?.expiresAt > Date.now()
-        ? _fhCache.get(ticker).data : null
-      if (!fhData) {
-        try {
-          const FH  = `https://finnhub.io/api/v1`
-          const now = Math.floor(Date.now() / 1000)
-          const yr  = now - 365 * 86400
-          const [qRes, mRes, pRes, cRes] = await Promise.allSettled([
-            fetch(`${FH}/quote?symbol=${encodeURIComponent(ticker)}&token=${FINNHUB_KEY}`,                                                      { signal: AbortSignal.timeout(8_000) }),
-            fetch(`${FH}/stock/metric?symbol=${encodeURIComponent(ticker)}&metric=all&token=${FINNHUB_KEY}`,                                     { signal: AbortSignal.timeout(8_000) }),
-            fetch(`${FH}/stock/profile2?symbol=${encodeURIComponent(ticker)}&token=${FINNHUB_KEY}`,                                              { signal: AbortSignal.timeout(8_000) }),
-            fetch(`${FH}/stock/candle?symbol=${encodeURIComponent(ticker)}&resolution=M&from=${yr}&to=${now}&token=${FINNHUB_KEY}`,              { signal: AbortSignal.timeout(8_000) }),
-          ])
-          fhData = {
-            q: qRes.status === 'fulfilled' && qRes.value.ok ? await qRes.value.json() : {},
-            m: (mRes.status === 'fulfilled' && mRes.value.ok ? await mRes.value.json() : {}).metric ?? {},
-            p: pRes.status === 'fulfilled' && pRes.value.ok ? await pRes.value.json() : {},
-            c: cRes.status === 'fulfilled' && cRes.value.ok ? await cRes.value.json() : {},
-          }
-          _fhCache.set(ticker, { data: fhData, expiresAt: Date.now() + 60_000 })
-        } catch { fhData = { q: {}, m: {}, p: {}, c: {} } }
-      }
-      if (!fhData.q?.c) return res.status(502).json({ error: 'no data from any source' })
-      payload = normalizeFinnhub(fhData.q, fhData.m, fhData.p, fhData.c)
-
     } else {
-      return res.status(502).json({ error: 'no data from any source' })
+      // Caso D: BYMA no disponible — sin datos de precio ARS
+      return res.status(502).json({ error: 'no BYMA data available' })
     }
 
     res.setHeader('Cache-Control', 's-maxage=40, stale-while-revalidate=20')

@@ -186,7 +186,7 @@ function StockHeader({ data, color, tr }) {
             {data.ticker}
           </span>
           <div className="flex items-baseline gap-1.5 mt-0.5">
-            <span className="font-mono font-bold text-white text-2xl">${data.price}</span>
+            <span className="font-mono font-bold text-white text-2xl">${data.price?.toLocaleString('es-AR')}</span>
             <span className={`font-mono text-xs font-semibold ${up ? 'text-green-400' : 'text-red-400'}`}>
               {up ? '+' : ''}{data.changePct}%
             </span>

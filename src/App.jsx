@@ -16,7 +16,7 @@ function buildReportText(data, tr) {
   if (!data) return ''
   return [
     `=== ${data.ticker} — ${tr.riskScore}: ${data.score}/100 ===`,
-    `${tr.price}: $${data.price} | ${tr.change}: ${data.changePct}%`,
+    `${tr.price}: $${data.price?.toLocaleString('es-AR')} ARS | ${tr.change}: ${data.changePct}%`,
     `${tr.marketCap}: ${data.marketCap} | ${tr.volume}: ${data.volume}`,
     '',
     `--- ${tr.valuation} ---`,
@@ -90,22 +90,22 @@ export default function App() {
               <>
                 {error && (
                   <div className="mb-4 px-3 py-2.5 bg-amber-400/10 border border-amber-400/30 rounded-lg text-xs font-mono text-amber-400 leading-relaxed">
-                    ⚠ Live data unavailable — showing simulated data for {ticker}
+                    ⚠ Datos en vivo no disponibles — mostrando datos simulados para {ticker}
                   </div>
                 )}
-                {!error && data?.source === 'yahoo_price' && (
+                {!error && data?.source === 'byma_price' && (
                   <div className="mb-4 px-3 py-2.5 bg-blue-400/10 border border-blue-400/30 rounded-lg text-xs font-mono text-blue-400 leading-relaxed">
-                    ℹ Live price · Fundamentals estimated (crumb unavailable)
+                    ℹ Precio BYMA en vivo · Fundamentales estimados
                   </div>
                 )}
-                {!error && data?.source === 'yahoo+finnhub' && (
+                {!error && data?.source === 'byma+finnhub' && (
                   <div className="mb-4 px-3 py-2.5 bg-cyan-400/10 border border-cyan-400/30 rounded-lg text-xs font-mono text-cyan-400 leading-relaxed">
-                    ⚡ Live price via Yahoo · Fundamentals via Finnhub
+                    ⚡ Precio BYMA · Fundamentales vía Finnhub
                   </div>
                 )}
-                {!error && data?.source === 'finnhub' && (
-                  <div className="mb-4 px-3 py-2.5 bg-violet-400/10 border border-violet-400/30 rounded-lg text-xs font-mono text-violet-400 leading-relaxed">
-                    ⚡ All data via Finnhub (Yahoo Finance unavailable)
+                {!error && data?.source === 'byma_full' && (
+                  <div className="mb-4 px-3 py-2.5 bg-green-400/10 border border-green-400/30 rounded-lg text-xs font-mono text-green-400 leading-relaxed">
+                    ⚡ Precio BYMA · Fundamentales vía Yahoo Finance
                   </div>
                 )}
               </>
@@ -134,11 +134,10 @@ export default function App() {
                 </span>
                 {lastUpdate && page !== 3 && (
                   <span className="text-[9px] font-mono text-slate-700 truncate">
-                    {data?.source === 'yahoo_full'    ? '● yahoo'   :
-                     data?.source === 'yahoo+finnhub' ? '● hybrid'  :
-                     data?.source === 'finnhub'        ? '● finnhub' :
-                     data?.source === 'yahoo_price'    ? '◐ partial' :
-                     '○ simulated'} · {lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    {data?.source === 'byma_full'     ? '● byma'    :
+                     data?.source === 'byma+finnhub'  ? '● hybrid'  :
+                     data?.source === 'byma_price'    ? '◐ parcial' :
+                     '○ simulado'} · {lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                   </span>
                 )}
               </div>

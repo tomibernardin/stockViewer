@@ -18,13 +18,15 @@ export default function StockBar({ data, tr }) {
   const up          = (data.changePct ?? data.change ?? 0) >= 0
   const changeColor = up ? 'text-green-400' : 'text-red-400'
 
+  const arsVal = v => v != null ? `$${v.toLocaleString('es-AR')}` : '—'
+
   const items = [
-    { label: tr.price,      value: data.price     != null ? `$${data.price}`      : '—', color: 'text-white' },
-    { label: tr.change,     value: fmtChange(data.change, data.changePct, up),            color: changeColor },
-    { label: tr.volume,     value: data.volume     ?? '—',                                color: 'text-slate-300' },
-    { label: tr.marketCap,  value: data.marketCap  ?? '—',                                color: 'text-slate-300' },
-    { label: tr.week52High, value: data.week52High != null ? `$${data.week52High}` : '—', color: 'text-slate-300' },
-    { label: tr.week52Low,  value: data.week52Low  != null ? `$${data.week52Low}`  : '—', color: 'text-slate-300' },
+    { label: `${tr.price} ARS`, value: arsVal(data.price),      color: 'text-white' },
+    { label: tr.change,         value: fmtChange(data.change, data.changePct, up), color: changeColor },
+    { label: tr.volume,         value: data.volume     ?? '—',  color: 'text-slate-300' },
+    { label: tr.marketCap,      value: data.marketCap  ?? '—',  color: 'text-slate-300' },
+    { label: tr.week52High,     value: arsVal(data.week52High), color: 'text-slate-300' },
+    { label: tr.week52Low,      value: arsVal(data.week52Low),  color: 'text-slate-300' },
   ]
 
   return (
